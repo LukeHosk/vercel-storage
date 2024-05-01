@@ -2,6 +2,7 @@ import type {
   PoolClient,
   QueryResult,
   QueryResultRow,
+  HTTPQueryOptions,
 } from '@neondatabase/serverless';
 import { Pool, neon } from '@neondatabase/serverless';
 import type { VercelPoolClient, VercelPostgresPoolConfig } from './types';
@@ -18,6 +19,7 @@ import { VercelClient } from './create-client';
 export class VercelPool extends Pool {
   Client = VercelClient;
   private connectionString: string;
+  private queryOptions: HTTPQueryOptions<false, true> | undefined = undefined;
 
   constructor(config: VercelPostgresPoolConfig) {
     super(config);
@@ -46,7 +48,25 @@ export class VercelPool extends Pool {
     const sql = neon(this.connectionString, {
       fullResults: true,
     });
-    return sql(query, params) as unknown as Promise<QueryResult<O>>;
+    return sql(query, params, this.queryOptions) as unknown as Promise<
+      QueryResult<O>
+    >;
+  }
+
+  withFetchOptions(
+    fetchOptions: HTTPQueryOptions<false, true>['fetchOptions'],
+  ): this {
+    return new Proxy(this, {
+      get: (target, prop) => {
+        if (prop === 'fetchOptions') {
+          return {
+            ...this.queryOptions,
+            fetchOptions,
+          };
+        }
+        return Reflect.get(target, prop);
+      },
+    });
   }
 
   connect(): Promise<VercelPoolClient>;
